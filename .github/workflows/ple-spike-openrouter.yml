@@ -1,0 +1,189 @@
+name: ple-spike-openrouter
+# PLE spike step 5 on GitHub Actions + OpenRouter. ONE task only.
+# Prepared 24 Nov 2026; NOT run until the OPENROUTER_API_KEY repo secret
+# exists. It CANNOT be set by any script: the key lives only in the Secure
+# Vault and its value cannot transit to GitHub, so Bara pastes a fresh
+# second key himself in the repo web UI (Settings -> Secrets -> Actions).
+# HF_TOKEN + GONKA_API_KEY are already set (24 Nov ~11:15 WIB, vault PAT
+# script, HTTP 201). Model verified live on Bara's account 24 Nov ~11:08
+# WIB: recursive/flint-v1.0:free tool-call probe PASS (1.6s, correct call);
+# ernie-5.5-flash-preview:free is the named fallback ONLY if flint 429s
+# repeatedly (no fallback switching is built into this workflow).
+# No dockerd startup, no socket chmod, no nft fib patch: Docker works
+# natively on ubuntu-latest and FIB_OK was proven by the venue probe
+# (run 45320008404).
+on:
+  push:
+    paths:
+      - '.github/workflows/ple-spike-openrouter.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ple-spike-openrouter
+  cancel-in-progress: false
+jobs:
+  spike:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail fast if secrets are missing
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$OPENROUTER_API_KEY" ]; then echo "OPENROUTER_API_KEY secret is missing or empty: Bara must paste a fresh OpenRouter key in the repo web UI (Settings -> Secrets -> Actions) before this workflow can run" >&2; exit 1; fi
+          if [ -z "$HF_TOKEN" ]; then echo "HF_TOKEN secret is missing or empty" >&2; exit 1; fi
+          echo "required secrets present (names only, values never printed)"
+
+      - name: System specs
+        run: |
+          date +%s > start-epoch.txt
+          echo "nproc: $(nproc)"
+          free -m
+          df -h / | tail -1
+          docker --version
+
+      - name: Set up uv + Python 3.12
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          uv python install 3.12
+          uv --version
+
+      - name: Clone ple @8320f04
+        run: |
+          git clone https://github.com/google-research/ple ple
+          cd ple && git checkout 8320f04 && git log --oneline -1
+
+      - name: Install Harbor 0.20.0
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv tool install harbor==0.20.0 --with websockets
+          harbor --version
+
+      - name: Build OpenRouter entry (plan-verify-openrouter)
+        run: |
+          cp -r ple/sample_submissions/plan-verify entry-plan-verify-openrouter
+          python3 - <<'PY'
+          p = 'entry-plan-verify-openrouter/submission.yaml'
+          s = open(p).read()
+          assert 'name: plan-verify' in s
+          assert 'model_api: google-cloud/claude-opus-5-5' in s
+          s = s.replace('name: plan-verify', 'name: plan-verify-openrouter')
+          s = s.replace('model_api: google-cloud/claude-opus-5-5',
+                        'model_api: "openai-compatible/recursive/flint-v1.0:free"\nmodel_base_url: https://openrouter.ai/api/v1')
+          open(p, 'w').write(s)
+          print(open(p).read())
+          PY
+          cd entry-plan-verify-openrouter && git init -q && git add -A && git -c user.email=spike@local -c user.name=spike commit -qm 'plan-verify-openrouter' && git log --oneline -1
+
+      - name: Write local.env from secrets (key names only in log)
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          umask 077
+          printf 'MODEL_API_KEY=%s\nOPENAI_API_KEY=%s\nHF_TOKEN=%s\n' "$OPENROUTER_API_KEY" "$OPENROUTER_API_KEY" "$HF_TOKEN" > ple/local.env
+          chmod 600 ple/local.env
+          cut -d= -f1 ple/local.env
+
+      - name: kit validate
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          cd ple && uv run python -m kit validate ../entry-plan-verify-openrouter
+
+      - name: kit check (non-gating; model stage may fail on free-tier routing/rate limits)
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          cd ple && uv run python -m kit check ../entry-plan-verify-openrouter --env-file local.env --model-base-url https://openrouter.ai/api/v1 > ../kitcheck.log 2>&1 || echo "kit check exited non-zero (expected possibly: its model stage hits the free-tier shared pool; the build/files stages are what matter here)"
+          tail -n 60 ../kitcheck.log
+
+      - name: Eval — ONE task only (frame-extension-method)
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          cd ple && uv run python eval/run.py ../entry-plan-verify-openrouter --env-file local.env --model-base-url https://openrouter.ai/api/v1 --tasks frame-extension-method
+
+      - name: Write spike-result-openrouter.txt
+        if: always()
+        run: |
+          END=$(date +%s)
+          START=$(cat start-epoch.txt 2>/dev/null || echo "$END")
+          {
+            echo "# PLE spike result (GitHub Actions + OpenRouter)"
+            echo "run: ${GITHUB_RUN_ID} attempt ${GITHUB_RUN_ATTEMPT}"
+            echo "job wall time (s): $((END - START))"
+            echo "model declared: openai-compatible/recursive/flint-v1.0:free"
+            echo "model_base_url: https://openrouter.ai/api/v1"
+            echo "task: frame-extension-method (checks-graded, one task only)"
+            echo "ple commit: 8320f04"
+          } > spike-result-openrouter.txt
+          python3 - <<'PY' >> spike-result-openrouter.txt
+          import glob, json, os
+          try:
+              fs = sorted(glob.glob('ple/runs/*/results.json'))
+              print('results.json files:', fs if fs else 'NONE')
+              for f in fs[-1:]:
+                  d = json.load(open(f))
+                  print('results file:', f)
+                  print('top-level keys:', sorted(d.keys()))
+                  trials = d.get('trials') or d.get('results') or []
+                  if isinstance(trials, dict):
+                      trials = list(trials.values())
+                  for t in trials if isinstance(trials, list) else []:
+                      if not isinstance(t, dict):
+                          continue
+                      print('trial:', {k: t.get(k) for k in ('task', 'task_id', 'name', 'score', 'status', 'duration_s', 'wall_time_s', 'attempts') if k in t})
+                  s = json.dumps(d)[:1500]
+                  print('results head:', s)
+          except Exception as e:
+              print('summarizer error:', type(e).__name__)
+          try:
+              cfs = sorted(glob.glob('ple/**/check.json', recursive=True))
+              print('check.json files:', cfs if cfs else 'NONE')
+              for f in cfs[-1:]:
+                  print('check head:', open(f).read()[:800])
+          except Exception as e:
+              print('check summarizer error:', type(e).__name__)
+          PY
+          echo "=== kitcheck.log tail ===" >> spike-result-openrouter.txt
+          tail -n 20 kitcheck.log >> spike-result-openrouter.txt 2>/dev/null || echo "(no kitcheck.log)" >> spike-result-openrouter.txt
+      - name: Fail if a secret value appears in upload paths (quiet scan)
+        id: secret-scan
+        if: always()
+        env:
+          SCAN_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          SCAN_HF: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$SCAN_KEY" ] || [ -z "$SCAN_HF" ]; then echo "scan secret is empty; refusing to publish artifacts" >&2; exit 1; fi
+          leak=0
+          for p in ple/runs/ kitcheck.log spike-result-openrouter.txt; do
+            if [ -e "$p" ] && grep -rFq -- "$SCAN_KEY" "$p" 2>/dev/null; then leak=1; fi
+            if [ -e "$p" ] && grep -rFq -- "$SCAN_HF" "$p" 2>/dev/null; then leak=1; fi
+          done
+          if [ "$leak" -eq 1 ]; then echo "secret value found in upload paths; refusing to publish artifacts" >&2; exit 1; fi
+          echo "scan clean (names only, values never printed)"
+
+      - name: Commit spike-result-openrouter.txt back to main
+        if: ${{ always() && steps.secret-scan.outcome == 'success' }}
+        run: |
+          git config user.name "ple-spike"
+          git config user.email "ple-spike@local"
+          git checkout main 2>/dev/null || git checkout -b main
+          git add spike-result-openrouter.txt
+          git commit -m "spike result (openrouter) ${GITHUB_RUN_ID}" || echo "nothing to commit"
+          git push origin main || echo "push failed"
+
+      - name: Upload run artifacts
+        if: ${{ always() && steps.secret-scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: spike-run-openrouter-${{ github.run_id }}
+          path: |
+            ple/runs/
+            kitcheck.log
+            spike-result-openrouter.txt
+          if-no-files-found: warn
+          retention-days: 30
