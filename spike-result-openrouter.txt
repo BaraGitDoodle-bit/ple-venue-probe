@@ -1,0 +1,23 @@
+# PLE spike result (GitHub Actions + OpenRouter)
+run: 45445129680 attempt 1
+job wall time (s): 1090
+model declared: openai-compatible/recursive/flint-v1.0:free
+model_base_url: https://openrouter.ai/api/v1
+task: frame-extension-method (checks-graded, one task only)
+ple commit: 8320f04
+results.json files: ['ple/runs/plan-verify-openrouter-20261124-171355/results.json']
+results file: ple/runs/plan-verify-openrouter-20261124-171355/results.json
+top-level keys: ['complete', 'date', 'judge_model', 'model', 'model_base_url', 'no_export', 'score', 'submission', 'submission_dir', 'tasks', 'tasks_repo', 'tasks_revision', 'unmeasured']
+results head: {"submission": "plan-verify-openrouter", "model": "openai-compatible/recursive/flint-v1.0:free", "score": 0.0, "complete": true, "unmeasured": [], "judge_model": "recursive/flint-v1.0:free", "date": "2026-11-24T17:26:21Z", "submission_dir": "/home/runner/work/ple-venue-probe/ple-venue-probe/entry-plan-verify-openrouter", "model_base_url": "https://openrouter.ai/api/v1", "no_export": false, "tasks_repo": "google/physical-engineerings-last-exam", "tasks_revision": "e0c21fa558c3127785656398e3b3bd7da5e5a5a6", "tasks": [{"id": "frame-extension-method", "score": 0.0, "reward": 0.0, "measured": true, "status": "harness: NonZeroAgentExitCodeError", "kind": "harness", "seconds": 647, "trial": "attempt1/jobs/dev/frame-extension-method__b75FAGR", "tokens": {"input": 669530, "cache": 607744, "output": 12720}, "graded_by": "", "artifact": "", "claimed": null}]}
+check.json files: NONE
+=== kitcheck.log tail ===
+[PASS] submission.yaml: plan-verify-openrouter: openai-compatible/recursive/flint-v1.0:free, egress openrouter.ai:443
+[PASS] files: 6 files
+[PASS] build: bundle 115 MiB, built in 24 s; image plebench-serve:667e39314e04235c
+[PASS] model: recursive/flint-v1.0:free (openai-compatible) answered in 0.9 s through the egress proxy
+[PASS] listen: websocket accepted 2 s after start
+[PASS] smoke: hello.txt written, done in 151 s with 8 request(s), 12862 in / 10371 out tokens; final message '**Updated summary:**\n\n- **Deliverable:** `/app/hello.txt` wa'
+[WARN] mcp: /app/mcp.txt is right, but no request was an http request: the harness found it another way; held-out tasks can expose MCP servers like this one (docs/protocol.md)
+[WARN] artifacts: no artifacts/ yet: `uv run python eval/run.py /home/runner/work/ple-venue-probe/ple-venue-probe/entry-plan-verify-openrouter` writes it
+
+the stages that ran pass, but model_api names a model of your own, which runs locally only: the competition accepts only google-cloud/<id> models (docs/models.md) (logs in /home/runner/.cache/plebench/plan-verify-openrouter)
