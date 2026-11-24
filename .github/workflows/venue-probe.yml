@@ -1,0 +1,65 @@
+name: venue-probe
+on:
+  push:
+    paths:
+      - '.github/workflows/venue-probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: System specs
+        run: |
+          START=$(date +%s)
+          echo "$START" > start-epoch.txt
+          {
+            echo "=== SPECS ==="
+            echo "nproc: $(nproc)"
+            echo "--- free -m ---"; free -m
+            echo "--- df -h ---"; df -h
+            echo "--- uname -r ---"; uname -r
+            echo "--- cgroup ---"; stat -fc %T /sys/fs/cgroup/ 2>/dev/null || true
+            if [ -f /sys/fs/cgroup/cgroup.controllers ]; then echo "cgroup v2"; else echo "cgroup v1"; fi
+            echo "--- docker ---"; docker --version
+            echo "--- nft ---"; nft --version
+          } | tee specs.txt
+      - name: Docker hello-world
+        run: |
+          set +e
+          docker run --rm hello-world > docker-hello.txt 2>&1
+          echo "DOCKER_EXIT=$?" >> docker-hello.txt
+          cat docker-hello.txt
+      - name: nft fib test
+        run: |
+          set +e
+          sudo nft add table inet probetest 2> nft-err.txt
+          sudo nft 'add chain inet probetest probe { type filter hook output priority 0; }' 2>> nft-err.txt
+          sudo nft 'add rule inet probetest probe fib daddr type local return' 2>> nft-err.txt
+          if [ $? -eq 0 ]; then echo "FIB_OK" | tee fib-result.txt; else echo "FIB_FAIL" | tee fib-result.txt; fi
+          sudo nft list ruleset > nft-ruleset.txt 2>&1 || true
+          sudo nft delete table inet probetest 2>/dev/null || true
+          echo "--- nft stderr ---"; cat nft-err.txt
+      - name: Commit results
+        if: always()
+        run: |
+          END=$(date +%s)
+          START=$(cat start-epoch.txt)
+          {
+            echo "# Venue probe result"
+            echo "run: ${GITHUB_RUN_ID} attempt ${GITHUB_RUN_ATTEMPT}"
+            echo "job wall time (s): $((END - START))"
+            cat specs.txt 2>/dev/null
+            echo "=== DOCKER ==="; cat docker-hello.txt 2>/dev/null
+            echo "=== FIB ==="; cat fib-result.txt 2>/dev/null
+            echo "=== NFT RULESET ==="; cat nft-ruleset.txt 2>/dev/null
+          } > probe-result.txt
+          git config user.name "venue-probe"
+          git config user.email "venue-probe@local"
+          git checkout main 2>/dev/null || git checkout -b main
+          git add probe-result.txt
+          git commit -m "probe result ${GITHUB_RUN_ID}" || echo "nothing to commit"
+          git push origin main || echo "push failed"
