@@ -1,0 +1,17 @@
+name: rig-tunnel-probe
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe tunnel health and tool call
+        env:
+          TUNNEL_URL: https://win-responses-wool-contractor.trycloudflare.com
+        run: |
+          echo "=== HEALTH ==="
+          curl -sS -m 60 "$TUNNEL_URL/health" || echo "HEALTH_REQUEST_FAILED"
+          echo "=== CHAT TOOL CALL ==="
+          curl -sS -m 180 -X POST "$TUNNEL_URL/v1/chat/completions" -H "Content-Type: application/json" -d '{"model":"qwen3-8b-abliterated","messages":[{"role":"user","content":"Use the add tool to compute 17+25."}],"tools":[{"type":"function","function":{"name":"add","description":"Add two numbers","parameters":{"type":"object","properties":{"a":{"type":"number"},"b":{"type":"number"}},"required":["a","b"]}}}],"tool_choice":"auto","max_tokens":512}' -o /tmp/probe.json || echo "CHAT_REQUEST_FAILED"
+          cat /tmp/probe.json
+          python3 -c "import json;d=json.load(open('/tmp/probe.json'));m=d['choices'][0]['message'];print('TOOLCALLS_PRESENT' if m.get('tool_calls') else 'TOOLCALLS_ABSENT', '| finish:', d['choices'][0].get('finish_reason'))"
