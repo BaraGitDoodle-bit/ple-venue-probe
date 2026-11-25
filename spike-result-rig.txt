@@ -1,0 +1,23 @@
+# PLE spike result (GitHub Actions + Kaggle self-host rig v4)
+run: 45558602207 attempt 1
+job wall time (s): 4943
+model declared: openai-compatible/qwen3-8b-abliterated
+model_base_url: https://win-responses-wool-contractor.trycloudflare.com/v1
+task: frame-extension-method (checks-graded, one task only)
+ple commit: 8320f04
+results.json files: ['ple/runs/plan-verify-rig-20261125-061649/results.json']
+results file: ple/runs/plan-verify-rig-20261125-061649/results.json
+top-level keys: ['complete', 'date', 'judge_model', 'model', 'model_base_url', 'no_export', 'score', 'submission', 'submission_dir', 'tasks', 'tasks_repo', 'tasks_revision', 'unmeasured']
+results head: {"submission": "plan-verify-rig", "model": "openai-compatible/qwen3-8b-abliterated", "score": 0.0, "complete": true, "unmeasured": [], "judge_model": "qwen3-8b-abliterated", "date": "2026-11-25T07:32:35Z", "submission_dir": "/home/runner/work/ple-venue-probe/ple-venue-probe/entry-plan-verify-rig", "model_base_url": "https://win-responses-wool-contractor.trycloudflare.com/v1", "no_export": false, "tasks_repo": "google/physical-engineerings-last-exam", "tasks_revision": "9ca4de831267dd81750f958c6c6c58df6407104b", "tasks": [{"id": "frame-extension-method", "score": 0.0, "reward": 0.0, "measured": true, "status": "harness: NonZeroAgentExitCodeError", "kind": "harness", "seconds": 4445, "trial": "attempt1/jobs/dev/frame-extension-method__bJFZzRG", "tokens": {"input": 9426210, "output": 22438}, "graded_by": "", "artifact": "", "claimed": null}]}
+check.json files: NONE
+=== kitcheck.log tail ===
+[PASS] submission.yaml: plan-verify-rig: openai-compatible/qwen3-8b-abliterated, egress win-responses-wool-contractor.trycloudflare.com:443
+[PASS] files: 6 files
+[PASS] build: bundle 115 MiB, built in 29 s; image plebench-serve:617f0b86c3e5e02d
+[PASS] model: qwen3-8b-abliterated (openai-compatible) answered in 0.6 s through the egress proxy
+[PASS] listen: websocket accepted 1 s after start
+[PASS] smoke: hello.txt written, done in 7 s with 5 request(s), 3358 in / 129 out tokens; final message 'done'
+[WARN] mcp: done after 241 request(s), but /app/mcp.txt holds 'cat: /app/mcp.txt: No such file or directory'; held-out tasks can expose MCP servers like this one (docs/protocol.md)
+[WARN] artifacts: no artifacts/ yet: `uv run python eval/run.py /home/runner/work/ple-venue-probe/ple-venue-probe/entry-plan-verify-rig` writes it
+
+the stages that ran pass, but model_api names a model of your own, which runs locally only: the competition accepts only google-cloud/<id> models (docs/models.md) (logs in /home/runner/.cache/plebench/plan-verify-rig)
